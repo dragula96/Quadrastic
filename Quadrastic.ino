@@ -1,6 +1,6 @@
 /*
   Quadrastic
-  version: 1.0
+  version: 1.01
   February  09, 2017
   Copyright (C) 2015 David Martinez
   All rights reserved.
@@ -22,13 +22,12 @@
 Arduboy2 arduboy;
 ArduboyPlaytune tunes(arduboy.audio.enabled);
 // Variables for your game go here.
-//char title[] = "Press Buttons!";
 byte playerX;
 byte playerY;
 byte score;
 byte highScore;
+byte soundOptions;
 bool playerIntroPlayed;
-bool soundOn = true;
 byte delayPressA;
 enum GAME_STATE {TITLE_SCREEN, GAME, GAME_OVER, PAUSED, SPLASH_SCREEN};
 GAME_STATE gameState;
@@ -47,12 +46,13 @@ struct Target {
     Size = 15;
     x =  1 + random(1, 32) * 4;
     y =  1 + random(1, 16) * 4 ;
+    Rect scoreRect = {.x = WIDTH / 2 - 8, .y = 0, .width = 16, .height = 10};
     Rect playerRect = {.x = playerX, .y = playerY, .width = PLAYER_SIZE, .height = PLAYER_SIZE};
 
     bool badSpawn = true; //lets asume its always a bad spawn (untill it isnt)
     while (badSpawn) {
       Point targetPoint = {.x = x, .y = y};
-      if (arduboy.collide(targetPoint, playerRect)) {
+      if ((arduboy.collide(targetPoint, playerRect)) || (arduboy.collide(targetPoint, scoreRect)) ) {
         x =  1 + random(1, 32) * 4;
         y =  1 + random(1, 16) * 4 ;
         badSpawn = true;
@@ -102,9 +102,6 @@ struct Enemy {
       }
 
     }
-
-
-
 
     //IF LEFTRIGHT WINS
     if (leftRightorUpDown == 0) {
@@ -157,7 +154,7 @@ void setup() {
 
   // here we set the framerate
   arduboy.setFrameRate(30);
-
+  soundOptions = 2; //0 = mute, 1 = SFX only, 2 = both music and sound effects.
   // audio setup
   tunes.initChannel(PIN_SPEAKER_1);
 #ifndef AB_DEVKIT
@@ -169,20 +166,11 @@ void setup() {
   tunes.toneMutesScore(true);       // mute the score when a tone is sounding
 #endif
 
-  arduboy.invert(!arduboy.audio.enabled()); // invert display if sound muted
-
-
-
   highScore = 0;
   createEnemies();
 
   gameState = SPLASH_SCREEN;
 }
-
-
-
-
-
 
 // our main game loop, this runs once every cycle/frame.
 // this is where our game logic goes.
@@ -207,7 +195,6 @@ void loop() {
       arduboy.display();
       delay(2000);
 
-
       gameState = TITLE_SCREEN;
       break;
     case TITLE_SCREEN:
@@ -227,8 +214,15 @@ void loop() {
 
         arduboy.clear();
         arduboy.drawBitmap(WIDTH / 2 - 52, 10, titleImg, 109, 16, WHITE);
-        if (soundOn) {
-          arduboy.drawBitmap(WIDTH - 14, HEIGHT - 14, speakerImg, 16, 16, WHITE);
+
+        if (soundOptions > 0) {
+          arduboy.drawBitmap(WIDTH - 20, HEIGHT - 14, speakerImg, 16, 16, WHITE);
+        }
+        if (soundOptions == 0) {
+          arduboy.drawBitmap(WIDTH - 36, HEIGHT - 12, muteImg, 32, 8, WHITE);
+        }
+        if (soundOptions == 2) {
+          arduboy.drawBitmap(WIDTH - 36, HEIGHT - 14, noteImg, 16, 16, WHITE);
         }
 
         delayPressA += 2;
@@ -240,12 +234,14 @@ void loop() {
         // if the  B button is pressed TUGGLE SOUND
         arduboy.pollButtons();
         if (arduboy.justPressed(B_BUTTON)) {
+          soundOptions ++;
+          if (soundOptions > 2) {
+            soundOptions = 0;
+          }
+          if (soundOptions == 0) {
 
-          if (soundOn) {
-            soundOn = false;
             arduboy.audio.off();
           } else {
-            soundOn = true;
             arduboy.audio.on();
           }
         }
@@ -265,6 +261,7 @@ void loop() {
 
       }
       break;
+
     case GAME_OVER:
 
       arduboy.clear();
@@ -279,20 +276,15 @@ void loop() {
       arduboy.print("SCORE:");
       arduboy.print(score);
 
-
-
-
       arduboy.display();
       delay(3000);
       gameState = TITLE_SCREEN;
-
       break;
+
     case PAUSED:
 
 
       arduboy.pollButtons();
-
-
 
       arduboy.setCursor(WIDTH / 2 - 23, HEIGHT / 2 - 3);
       arduboy.print("PAUSED!");
@@ -303,8 +295,8 @@ void loop() {
         gameState = GAME;
       }
       break;
-    case GAME:
 
+    case GAME:
       //PLAYER INTRO EFFECT
       if (!playerIntroPlayed) {
         byte x1 = 0;
@@ -347,15 +339,14 @@ void loop() {
       arduboy.display();
 
       // play the tune if we aren't already
-      if (!tunes.playing())
+      if ((!tunes.playing()) && (soundOptions == 2) && (gameState != GAME_OVER)) {
         tunes.playScore(bgm);
-
+      }
 
       //END GAME SWITCH CASE
       break;
   }
 }
-
 
 void checkButtons() {
   // the next couple of lines will deal with checking if the D-pad buttons
@@ -363,22 +354,22 @@ void checkButtons() {
   // We check to make sure that x and y stay within a range that keeps the
   // text on the screen.
 
-  // if the right button is pressed move 1 pixel to the right every frame
+  // if the right button is pressed
   if (arduboy.pressed(RIGHT_BUTTON) && (playerX < WIDTH - PLAYER_SIZE - 1)) {
     playerX += PLAYER_SPEED;
   }
 
-  // if the left button is pressed move 1 pixel to the left every frame
+  // if the left button is pressed
   if (arduboy.pressed(LEFT_BUTTON) && (playerX > 1)) {
     playerX -= PLAYER_SPEED;
   }
 
-  // if the up button is pressed move 1 pixel up every frame
+  // if the up button is pressed
   if ((arduboy.pressed(UP_BUTTON) && (playerY > 1))) {
     playerY -= PLAYER_SPEED;
   }
 
-  // if the down button  is pressed move 1 pixel down every frame
+  // if the down button  is pressed
   if ((arduboy.pressed(DOWN_BUTTON) ) && (playerY < HEIGHT - PLAYER_SIZE - 1)) {
     playerY += PLAYER_SPEED;
   }
@@ -416,8 +407,6 @@ void checkIfScored() {
     if (score > highScore) {
       highScore = score;
     }
-    //pause a bit for dramatic effect
-    //delay(100);
 
   }
 }
@@ -430,13 +419,17 @@ void updateEnemies() {
     for (byte i = 0; i < score; i++) {
       enemy[i].update();
       //DRAW ENEMY
-
       arduboy.drawBitmap(enemy[i].x, enemy[i].y, enemyImg, ENEMY_SIZE, ENEMY_SIZE, WHITE);
       //CHECK ENEMY COLLISIONS WITHIN THIS LOOP TO OPTIMIZE FRAMERATE
       Rect enemyRect = {.x = enemy[i].x, .y = enemy[i].y, .width = ENEMY_SIZE, .height = ENEMY_SIZE};
       //CHECK IF GAMEOVER
       if (arduboy.collide(enemyRect, playerRect)) {
+        //stop music
+        if (tunes.playing())
+          tunes.stopScore();
 
+        //PAUSE FOR VISUAL
+        delay(1000);
         gameState = GAME_OVER;
 
       }
